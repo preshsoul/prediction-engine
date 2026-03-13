@@ -157,18 +157,24 @@ def main():
     print("  Monte Carlo (2000 sims)...")
     mc = monte_carlo_simulation(2000)
 
-    print("  Generating predictions...")
-    predictions = []
+    print("  Generating multi-market predictions...")
+    from markets import predict_all_markets
+    from dashboard_v2 import generate_dashboard_v2
+
+    multi_predictions = []
     for g in upcoming:
-        pred = predict_game(g, recent_results=results, use_market=True)
+        pred = predict_all_markets(g, recent_results=results, use_market=True)
         if pred:
-            predictions.append(pred)
-    predictions.sort(key=lambda p: -p["confidence"])
-    print(f"  → {len(predictions)} predictions generated")
+            multi_predictions.append(pred)
+    multi_predictions.sort(key=lambda p: -p["moneyline"]["confidence"] if p else 0)
+    print(f"  → {len(multi_predictions)} games with all markets")
+
+    # Also keep flat moneyline list for backward compat
+    predictions = [p["moneyline"] for p in multi_predictions if p]
 
     # ── Step 4: Generate dashboard ───────────────────────────────
-    print("\n[4] Generating dashboard...")
-    html = generate_dashboard(bt_pure, bt_mkt, mc, predictions)
+    print("\n[4] Generating multi-market dashboard...")
+    html = generate_dashboard_v2(bt_pure, bt_mkt, mc, multi_predictions)
 
     site_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_site")
     os.makedirs(site_dir, exist_ok=True)
@@ -178,11 +184,13 @@ def main():
     print(f"  Dashboard saved to: {out}")
 
     # Also save predictions as JSON for future API use
+    from datetime import datetime as dt
     pred_path = os.path.join(DATA_DIR, "predictions.json")
     with open(pred_path, "w") as f:
         json.dump({
-            "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "generated_at": dt.utcnow().isoformat() + "Z",
             "predictions": predictions,
+            "multi_market": multi_predictions,
             "backtest_accuracy": bt_pure["overall"]["accuracy"],
         }, f, indent=2)
     print(f"  Predictions JSON saved to: {pred_path}")
